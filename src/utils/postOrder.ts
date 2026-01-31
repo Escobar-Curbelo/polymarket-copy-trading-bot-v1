@@ -7,6 +7,9 @@ const RETRY_LIMIT = ENV.RETRY_LIMIT;
 const USER_ADDRESS = ENV.USER_ADDRESS;
 const UserActivity = getUserActivityModel(USER_ADDRESS);
 
+/** Polymarket exige precio entre 0.01 y 0.99 (tick size). Evita crash "invalid price". */
+const clampPrice = (p: number): number => Math.min(0.99, Math.max(0.01, p));
+
 const postOrder = async (
     clobClient: ClobClient,
     condition: string,
@@ -39,20 +42,21 @@ const postOrder = async (
             }, orderBook.bids[0]);
 
             console.log('Max price bid:', maxPriceBid);
+            const bidPrice = clampPrice(parseFloat(maxPriceBid.price));
             let order_arges;
             if (remaining <= parseFloat(maxPriceBid.size)) {
                 order_arges = {
                     side: Side.SELL,
                     tokenID: my_position.asset,
                     amount: remaining,
-                    price: parseFloat(maxPriceBid.price),
+                    price: bidPrice,
                 };
             } else {
                 order_arges = {
                     side: Side.SELL,
                     tokenID: my_position.asset,
                     amount: parseFloat(maxPriceBid.size),
-                    price: parseFloat(maxPriceBid.price),
+                    price: bidPrice,
                 };
             }
             console.log('Order args:', order_arges);
@@ -91,25 +95,26 @@ const postOrder = async (
             }, orderBook.asks[0]);
 
             console.log('Min price ask:', minPriceAsk);
-            if (parseFloat(minPriceAsk.price) - 0.05 > trade.price) {
+            const askPrice = clampPrice(parseFloat(minPriceAsk.price));
+            if (askPrice - 0.05 > trade.price) {
                 console.log('Too big different price - do not copy');
                 await UserActivity.updateOne({ _id: trade._id }, { bot: true });
                 break;
             }
             let order_arges;
-            if (remaining <= parseFloat(minPriceAsk.size) * parseFloat(minPriceAsk.price)) {
+            if (remaining <= parseFloat(minPriceAsk.size) * askPrice) {
                 order_arges = {
                     side: Side.BUY,
                     tokenID: trade.asset,
                     amount: remaining,
-                    price: parseFloat(minPriceAsk.price),
+                    price: askPrice,
                 };
             } else {
                 order_arges = {
                     side: Side.BUY,
                     tokenID: trade.asset,
-                    amount: parseFloat(minPriceAsk.size) * parseFloat(minPriceAsk.price),
-                    price: parseFloat(minPriceAsk.price),
+                    amount: parseFloat(minPriceAsk.size) * askPrice,
+                    price: askPrice,
                 };
             }
             console.log('Order args:', order_arges);
@@ -156,20 +161,21 @@ const postOrder = async (
             }, orderBook.bids[0]);
 
             console.log('Max price bid:', maxPriceBid);
+            const sellPrice = clampPrice(parseFloat(maxPriceBid.price));
             let order_arges;
             if (remaining <= parseFloat(maxPriceBid.size)) {
                 order_arges = {
                     side: Side.SELL,
                     tokenID: trade.asset,
                     amount: remaining,
-                    price: parseFloat(maxPriceBid.price),
+                    price: sellPrice,
                 };
             } else {
                 order_arges = {
                     side: Side.SELL,
                     tokenID: trade.asset,
                     amount: parseFloat(maxPriceBid.size),
-                    price: parseFloat(maxPriceBid.price),
+                    price: sellPrice,
                 };
             }
             console.log('Order args:', order_arges);
